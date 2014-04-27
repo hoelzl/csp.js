@@ -1,0 +1,27 @@
+{
+  "name": "csp.js",
+  "version": "0.0.1",
+  "description": "Simple algorithms for solving constraint satisfaction problems",
+  "main": "test-boolean.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hoelzl/csp.js"
+  },
+  "keywords": [
+    "csp",
+    "algorithms"
+  ],
+  "author": "Matthias Hoelzl <tc@xantira.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/hoelzl/csp.js/issues"
+  },
+  "homepage": "https://github.com/hoelzl/csp.js",
+  "dependencies": {
+    "assert": "^1.1.1",
+    "traceur": "0.0.39"
+  }
+}
