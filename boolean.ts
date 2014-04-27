@@ -10,7 +10,8 @@ function anonymousVariableName () {
 }
 
 interface Evaluable {
-    evaluate (valuation): boolean;
+    evaluate (valuation): boolean;   // true or false
+    evaluate3 (valuation): boolean;  // true, false or undefined
 }
 
 interface HasVariables {
@@ -39,6 +40,9 @@ class Top implements Term {
     evaluate (valuation): boolean {
         return true;
     }
+    evaluate3 (valuation): boolean {
+        return true;
+    }
     variables () {
         return new collections.Set<Variable>();
     }
@@ -55,13 +59,16 @@ class Bottom implements Term {
     evaluate (valuation): boolean {
         return false;
     }
+    evaluate3 (valuation): boolean {
+        return false;
+    }
     variables () {
         return new collections.Set<Variable>();
     }
 }
 
 function f (): Term {
-    return new Top();
+    return new Bottom();
 }
 
 /// Implementation of Literals and General Terms
@@ -77,6 +84,13 @@ class Variable implements Literal {
         return this.name;
     }
     evaluate (valuation): boolean {
+        var value = valuation[this.name];
+        if (value === undefined) {
+            throw('Cannot evaluate undefined variable ' + this.name);
+        }
+        return  value;
+    }
+    evaluate3 (valuation): boolean {
         return valuation[this.name];
     }
     variables () {
@@ -97,7 +111,7 @@ function makeVariable (name: any = anonymousVariableName()) {
         }
         return new Variable(name);
     }
-    throw('Cannot create variable from ' + name);
+    throw('Cannot create subterm from ' + name);
 }
 
 var v = makeVariable;
@@ -105,14 +119,20 @@ var v = makeVariable;
 var negations = {};
 
 class Negation implements Literal {
-    constructor (public variable: Variable) {
-        negations[variable.name] = this;
+    constructor (public subterm: Term) {
+        if (subterm instanceof Variable) {
+            negations[(<Variable>subterm).name] = this;
+        }
     }
     toString (): string {
-        return '¬' + this.variable.name;
+        // TODO: Need to put parentheses around subterm (somtimes).
+        return '¬' + this.subterm.toString();
     }
     evaluate (valuation): boolean {
-        var value = valuation[this.variable.name];
+        return !this.subterm.evaluate(valuation);
+    }
+    evaluate3 (valuation): boolean {
+        var value = this.subterm.evaluate3(valuation);
         if (value === undefined) {
             return undefined;
         }
@@ -120,7 +140,7 @@ class Negation implements Literal {
     }
     variables () {
         var result = new collections.Set<Variable>();
-        result.add(this.variable);
+        result.union(this.subterm.variables());
         return result;
     }
 }
@@ -159,8 +179,11 @@ class And extends BinaryOperator implements Term {
         super(lhs, rhs);
     }
     evaluate (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) && this.rhs.evaluate(valuation);
+    }
+    evaluate3 (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === false || vr === false) {
             return false;
         }
@@ -180,8 +203,11 @@ class Or extends BinaryOperator implements Term {
         super(lhs, rhs);
     }
     evaluate (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) || this.rhs.evaluate(valuation);
+    }
+    evaluate3 (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === true || vr === true) {
             return true;
         }
@@ -201,8 +227,11 @@ class Implication extends BinaryOperator implements Term {
         super(lhs, rhs);
     }
     evaluate (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return !this.lhs.evaluate(valuation) || this.rhs.evaluate(valuation);
+    }
+    evaluate3 (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === false || vr === true) {
             return true;
         }
@@ -222,8 +251,11 @@ class Equivalence extends BinaryOperator implements Term {
         super(lhs, rhs);
     }
     evaluate (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) === this.rhs.evaluate(valuation);
+    }
+    evaluate3 (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === undefined || vr === undefined) {
             return undefined;
         }
@@ -248,7 +280,20 @@ class Clause extends collections.Set<Literal> implements Evaluable {
     evaluate (valuation): boolean {
         var result = false;
         this.forEach(l => {
-            var value = l.evaluate(valuation);
+            if (l.evaluate(valuation)) {
+                result = true;
+                // Break from loop.
+                return false;
+            }
+            // Continue loop.
+            return true;
+        });
+        return result;
+    }
+    evaluate3 (valuation): boolean {
+        var result = false;
+        this.forEach(l => {
+            var value = l.evaluate3(valuation);
             if (value) {
                 result = true;
                 // Break from loop.
@@ -276,7 +321,20 @@ class Cnf extends collections.Set<Clause> implements Evaluable {
     evaluate (valuation): boolean {
         var result = true;
         this.forEach(c => {
-            var value = c.evaluate(valuation);
+            if (!c.evaluate(valuation)) {
+                result = false;
+                // Break from loop.
+                return false;
+            }
+            // Continue loop.
+            return true;
+        });
+        return result;
+    }
+    evaluate3 (valuation): boolean {
+        var result = true;
+        this.forEach(c => {
+            var value = c.evaluate3(valuation);
             if (value === false) {
                 result = false;
                 // Break from loop.
@@ -307,8 +365,8 @@ function ttEntails (kb: Term, term: Term): boolean {
 function ttCheckAll (kb: Term, term: Term, vars: collections.Set<Variable>,
                      valuation: Object) {
     if (vars.isEmpty()) {
-        if (kb.evaluate(valuation)) {
-            return term.evaluate(valuation);
+        if (kb.evaluate3(valuation)) {
+            return term.evaluate3(valuation);
         } else {
             return true;
         }
@@ -328,7 +386,7 @@ function ttSatisfiable (term): boolean {
 function ttCheckAny (term: Term, vars: collections.Set<Variable>,
                      valuation: Object) {
     if (vars.isEmpty()) {
-        return term.evaluate(valuation);
+        return term.evaluate3(valuation);
     } else {
         var v = vars.pickAny();
         valuation[v.name] = true;

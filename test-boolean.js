@@ -9,10 +9,7 @@ var clause = new Clause([
     'A', not('B'),
     makeVariable('C'), not(makeVariable('D'))]);
 
-console.log(clause.evaluate({}) === undefined);
-console.log(clause.evaluate({ A: false }) === undefined);
 console.log(clause.evaluate({ A: true }) === true);
-console.log(clause.evaluate({ A: false, B: true, C: false }) === undefined);
 console.log(clause.evaluate({ A: false, B: true, C: false, D: true }) === false);
 console.log(clause.evaluate({ A: false, B: true, C: false, D: false }) === true);
 
@@ -20,8 +17,6 @@ var cnf = new Cnf([
     ['A', not('B'), 'C'],
     [not('A'), not('B'), 'C']]);
 
-console.log(cnf.evaluate({}) === undefined);
-console.log(cnf.evaluate({ A: true }) === undefined);
 console.log(cnf.evaluate({ A: true, B: true, C: false }) === false);
 console.log(cnf.evaluate({ A: true, B: false, C: true }) === true);
 console.log(cnf.evaluate({ A: true, B: true, C: true }) === true);
@@ -31,58 +26,109 @@ console.log(cnf.evaluate({ A: false, B: false, C: true }) === true);
 console.log(cnf.evaluate({ A: false, B: true, C: true }) === true);
 console.log(cnf.evaluate({ A: false, B: false, C: true }) === true);
 
+console.log(t().evaluate({}) === true);
+console.log(f().evaluate({}) === false);
+
 var a = v('A');
 var b = v('B');
 var c = v('C');
 var d = v('D');
 
-console.log(a.evaluate({}) === undefined);
 console.log(a.evaluate({ A: true }) === true);
 console.log(a.evaluate({ A: false }) === false);
 
-console.log(not(a).evaluate({}) === undefined);
 console.log(not(a).evaluate({ A: false }) === true);
 console.log(not(a).evaluate({ A: true }) === false);
 
-console.log(and(a, b).evaluate({}) === undefined);
-console.log(and(a, b).evaluate({ A: true }) === undefined);
-console.log(and(a, b).evaluate({ A: false }) === false);
-console.log(and(a, b).evaluate({ B: true }) === undefined);
-console.log(and(a, b).evaluate({ B: false }) === false);
 console.log(and(a, b).evaluate({ A: true, B: true }) === true);
 console.log(and(a, b).evaluate({ A: true, B: false }) === false);
 console.log(and(a, b).evaluate({ A: false, B: true }) === false);
 console.log(and(a, b).evaluate({ A: false, B: false }) === false);
 
-console.log(or(a, b).evaluate({}) === undefined);
-console.log(or(a, b).evaluate({ A: true }) === true);
-console.log(or(a, b).evaluate({ A: false }) === undefined);
-console.log(or(a, b).evaluate({ B: true }) === true);
-console.log(or(a, b).evaluate({ B: false }) === undefined);
 console.log(or(a, b).evaluate({ A: true, B: true }) === true);
 console.log(or(a, b).evaluate({ A: true, B: false }) === true);
 console.log(or(a, b).evaluate({ A: false, B: true }) === true);
 console.log(or(a, b).evaluate({ A: false, B: false }) === false);
 
-console.log(imp(a, b).evaluate({}) === undefined);
-console.log(imp(a, b).evaluate({ A: true }) === undefined);
-console.log(imp(a, b).evaluate({ A: false }) === true);
-console.log(imp(a, b).evaluate({ B: true }) === true);
-console.log(imp(a, b).evaluate({ B: false }) === undefined);
 console.log(imp(a, b).evaluate({ A: true, B: true }) === true);
 console.log(imp(a, b).evaluate({ A: true, B: false }) === false);
 console.log(imp(a, b).evaluate({ A: false, B: true }) === true);
 console.log(imp(a, b).evaluate({ A: false, B: false }) === true);
 
-console.log(iff(a, b).evaluate({}) === undefined);
-console.log(iff(a, b).evaluate({ A: true }) === undefined);
-console.log(iff(a, b).evaluate({ A: false }) === undefined);
-console.log(iff(a, b).evaluate({ B: true }) === undefined);
-console.log(iff(a, b).evaluate({ B: false }) === undefined);
 console.log(iff(a, b).evaluate({ A: true, B: true }) === true);
 console.log(iff(a, b).evaluate({ A: true, B: false }) === false);
 console.log(iff(a, b).evaluate({ A: false, B: true }) === false);
 console.log(iff(a, b).evaluate({ A: false, B: false }) === true);
+
+/// Evaluate 3
+console.log(clause.evaluate3({}) === undefined);
+console.log(clause.evaluate3({ A: false }) === undefined);
+console.log(clause.evaluate3({ A: true }) === true);
+console.log(clause.evaluate3({ A: false, B: true, C: false }) === undefined);
+console.log(clause.evaluate3({ A: false, B: true, C: false, D: true }) === false);
+console.log(clause.evaluate3({ A: false, B: true, C: false, D: false }) === true);
+
+console.log(cnf.evaluate3({}) === undefined);
+console.log(cnf.evaluate3({ A: true }) === undefined);
+console.log(cnf.evaluate3({ A: true, B: true, C: false }) === false);
+console.log(cnf.evaluate3({ A: true, B: false, C: true }) === true);
+console.log(cnf.evaluate3({ A: true, B: true, C: true }) === true);
+console.log(cnf.evaluate3({ A: true, B: false, C: true }) === true);
+console.log(cnf.evaluate3({ A: false, B: true, C: false }) === false);
+console.log(cnf.evaluate3({ A: false, B: false, C: true }) === true);
+console.log(cnf.evaluate3({ A: false, B: true, C: true }) === true);
+console.log(cnf.evaluate3({ A: false, B: false, C: true }) === true);
+
+console.log(t().evaluate3({}) === true);
+console.log(f().evaluate3({}) === false);
+
+console.log(a.evaluate3({}) === undefined);
+console.log(a.evaluate3({ A: true }) === true);
+console.log(a.evaluate3({ A: false }) === false);
+
+console.log(not(a).evaluate3({}) === undefined);
+console.log(not(a).evaluate3({ A: false }) === true);
+console.log(not(a).evaluate3({ A: true }) === false);
+
+console.log(and(a, b).evaluate3({}) === undefined);
+console.log(and(a, b).evaluate3({ A: true }) === undefined);
+console.log(and(a, b).evaluate3({ A: false }) === false);
+console.log(and(a, b).evaluate3({ B: true }) === undefined);
+console.log(and(a, b).evaluate3({ B: false }) === false);
+console.log(and(a, b).evaluate3({ A: true, B: true }) === true);
+console.log(and(a, b).evaluate3({ A: true, B: false }) === false);
+console.log(and(a, b).evaluate3({ A: false, B: true }) === false);
+console.log(and(a, b).evaluate3({ A: false, B: false }) === false);
+
+console.log(or(a, b).evaluate3({}) === undefined);
+console.log(or(a, b).evaluate3({ A: true }) === true);
+console.log(or(a, b).evaluate3({ A: false }) === undefined);
+console.log(or(a, b).evaluate3({ B: true }) === true);
+console.log(or(a, b).evaluate3({ B: false }) === undefined);
+console.log(or(a, b).evaluate3({ A: true, B: true }) === true);
+console.log(or(a, b).evaluate3({ A: true, B: false }) === true);
+console.log(or(a, b).evaluate3({ A: false, B: true }) === true);
+console.log(or(a, b).evaluate3({ A: false, B: false }) === false);
+
+console.log(imp(a, b).evaluate3({}) === undefined);
+console.log(imp(a, b).evaluate3({ A: true }) === undefined);
+console.log(imp(a, b).evaluate3({ A: false }) === true);
+console.log(imp(a, b).evaluate3({ B: true }) === true);
+console.log(imp(a, b).evaluate3({ B: false }) === undefined);
+console.log(imp(a, b).evaluate3({ A: true, B: true }) === true);
+console.log(imp(a, b).evaluate3({ A: true, B: false }) === false);
+console.log(imp(a, b).evaluate3({ A: false, B: true }) === true);
+console.log(imp(a, b).evaluate3({ A: false, B: false }) === true);
+
+console.log(iff(a, b).evaluate3({}) === undefined);
+console.log(iff(a, b).evaluate3({ A: true }) === undefined);
+console.log(iff(a, b).evaluate3({ A: false }) === undefined);
+console.log(iff(a, b).evaluate3({ B: true }) === undefined);
+console.log(iff(a, b).evaluate3({ B: false }) === undefined);
+console.log(iff(a, b).evaluate3({ A: true, B: true }) === true);
+console.log(iff(a, b).evaluate3({ A: true, B: false }) === false);
+console.log(iff(a, b).evaluate3({ A: false, B: true }) === false);
+console.log(iff(a, b).evaluate3({ A: false, B: false }) === true);
 
 /// ttEntails
 console.log(!ttTautology(and(a, not(a))));

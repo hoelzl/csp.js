@@ -36,6 +36,9 @@ var Top = (function () {
     Top.prototype.evaluate = function (valuation) {
         return true;
     };
+    Top.prototype.evaluate3 = function (valuation) {
+        return true;
+    };
     Top.prototype.variables = function () {
         return new collections.Set();
     };
@@ -55,6 +58,9 @@ var Bottom = (function () {
     Bottom.prototype.evaluate = function (valuation) {
         return false;
     };
+    Bottom.prototype.evaluate3 = function (valuation) {
+        return false;
+    };
     Bottom.prototype.variables = function () {
         return new collections.Set();
     };
@@ -62,7 +68,7 @@ var Bottom = (function () {
 })();
 
 function f() {
-    return new Top();
+    return new Bottom();
 }
 
 /// Implementation of Literals and General Terms
@@ -79,6 +85,13 @@ var Variable = (function () {
         return this.name;
     };
     Variable.prototype.evaluate = function (valuation) {
+        var value = valuation[this.name];
+        if (value === undefined) {
+            throw ('Cannot evaluate undefined variable ' + this.name);
+        }
+        return value;
+    };
+    Variable.prototype.evaluate3 = function (valuation) {
         return valuation[this.name];
     };
     Variable.prototype.variables = function () {
@@ -101,7 +114,7 @@ function makeVariable(name) {
         }
         return new Variable(name);
     }
-    throw ('Cannot create variable from ' + name);
+    throw ('Cannot create subterm from ' + name);
 }
 
 var v = makeVariable;
@@ -109,15 +122,21 @@ var v = makeVariable;
 var negations = {};
 
 var Negation = (function () {
-    function Negation(variable) {
-        this.variable = variable;
-        negations[variable.name] = this;
+    function Negation(subterm) {
+        this.subterm = subterm;
+        if (subterm instanceof Variable) {
+            negations[subterm.name] = this;
+        }
     }
     Negation.prototype.toString = function () {
-        return '¬' + this.variable.name;
+        // TODO: Need to put parentheses around subterm (somtimes).
+        return '¬' + this.subterm.toString();
     };
     Negation.prototype.evaluate = function (valuation) {
-        var value = valuation[this.variable.name];
+        return !this.subterm.evaluate(valuation);
+    };
+    Negation.prototype.evaluate3 = function (valuation) {
+        var value = this.subterm.evaluate3(valuation);
         if (value === undefined) {
             return undefined;
         }
@@ -125,7 +144,7 @@ var Negation = (function () {
     };
     Negation.prototype.variables = function () {
         var result = new collections.Set();
-        result.add(this.variable);
+        result.union(this.subterm.variables());
         return result;
     };
     return Negation;
@@ -168,8 +187,11 @@ var And = (function (_super) {
         this.rhs = rhs;
     }
     And.prototype.evaluate = function (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) && this.rhs.evaluate(valuation);
+    };
+    And.prototype.evaluate3 = function (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === false || vr === false) {
             return false;
         }
@@ -193,8 +215,11 @@ var Or = (function (_super) {
         this.rhs = rhs;
     }
     Or.prototype.evaluate = function (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) || this.rhs.evaluate(valuation);
+    };
+    Or.prototype.evaluate3 = function (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === true || vr === true) {
             return true;
         }
@@ -218,8 +243,11 @@ var Implication = (function (_super) {
         this.rhs = rhs;
     }
     Implication.prototype.evaluate = function (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return !this.lhs.evaluate(valuation) || this.rhs.evaluate(valuation);
+    };
+    Implication.prototype.evaluate3 = function (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === false || vr === true) {
             return true;
         }
@@ -243,8 +271,11 @@ var Equivalence = (function (_super) {
         this.rhs = rhs;
     }
     Equivalence.prototype.evaluate = function (valuation) {
-        var vl = this.lhs.evaluate(valuation);
-        var vr = this.rhs.evaluate(valuation);
+        return this.lhs.evaluate(valuation) === this.rhs.evaluate(valuation);
+    };
+    Equivalence.prototype.evaluate3 = function (valuation) {
+        var vl = this.lhs.evaluate3(valuation);
+        var vr = this.rhs.evaluate3(valuation);
         if (vl === undefined || vr === undefined) {
             return undefined;
         }
@@ -269,7 +300,22 @@ var Clause = (function (_super) {
     Clause.prototype.evaluate = function (valuation) {
         var result = false;
         this.forEach(function (l) {
-            var value = l.evaluate(valuation);
+            if (l.evaluate(valuation)) {
+                result = true;
+
+                // Break from loop.
+                return false;
+            }
+
+            // Continue loop.
+            return true;
+        });
+        return result;
+    };
+    Clause.prototype.evaluate3 = function (valuation) {
+        var result = false;
+        this.forEach(function (l) {
+            var value = l.evaluate3(valuation);
             if (value) {
                 result = true;
 
@@ -300,7 +346,22 @@ var Cnf = (function (_super) {
     Cnf.prototype.evaluate = function (valuation) {
         var result = true;
         this.forEach(function (c) {
-            var value = c.evaluate(valuation);
+            if (!c.evaluate(valuation)) {
+                result = false;
+
+                // Break from loop.
+                return false;
+            }
+
+            // Continue loop.
+            return true;
+        });
+        return result;
+    };
+    Cnf.prototype.evaluate3 = function (valuation) {
+        var result = true;
+        this.forEach(function (c) {
+            var value = c.evaluate3(valuation);
             if (value === false) {
                 result = false;
 
@@ -331,8 +392,8 @@ function ttEntails(kb, term) {
 
 function ttCheckAll(kb, term, vars, valuation) {
     if (vars.isEmpty()) {
-        if (kb.evaluate(valuation)) {
-            return term.evaluate(valuation);
+        if (kb.evaluate3(valuation)) {
+            return term.evaluate3(valuation);
         } else {
             return true;
         }
@@ -351,7 +412,7 @@ function ttSatisfiable(term) {
 
 function ttCheckAny(term, vars, valuation) {
     if (vars.isEmpty()) {
-        return term.evaluate(valuation);
+        return term.evaluate3(valuation);
     } else {
         var v = vars.pickAny();
         valuation[v.name] = true;
