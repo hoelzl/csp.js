@@ -15,7 +15,7 @@ interface Evaluable {
 }
 
 interface HasVariables {
-    variables(): collections.Set<Variable>;
+    variables(): IFSet<Variable>;
 }
 
 interface Term extends Evaluable, HasVariables {
@@ -24,9 +24,7 @@ interface Term extends Evaluable, HasVariables {
 class BinaryOperator implements HasVariables {
     constructor (public lhs: Term, public rhs: Term) {}
     variables () {
-        var result = this.lhs.variables();
-        result.union(this.rhs.variables());
-        return result;
+        return this.lhs.variables().union(this.rhs.variables());
     }
 }
 
@@ -44,7 +42,7 @@ class Top implements Term {
         return true;
     }
     variables () {
-        return new collections.Set<Variable>();
+        return fset<Variable>();
     }
 }
 
@@ -63,7 +61,7 @@ class Bottom implements Term {
         return false;
     }
     variables () {
-        return new collections.Set<Variable>();
+        return fset<Variable>();
     }
 }
 
@@ -77,26 +75,24 @@ var variables = {};
 
 class Variable implements Literal {
     constructor (public name: string = anonymousVariableName()) {
-        this.name = name;
         variables[name] = this;
     }
     toString (): string {
         return this.name;
     }
-    evaluate (valuation): boolean {
-        var value = valuation[this.name];
+    evaluate (valuation: IFMap<Variable, boolean>): boolean {
+        var value = valuation.value(this);
         if (value === undefined) {
             throw('Cannot evaluate undefined variable ' + this.name);
         }
         return  value;
     }
-    evaluate3 (valuation): boolean {
-        return valuation[this.name];
+    evaluate3 (valuation: IFMap<Variable, boolean>): boolean {
+        // console.log('Variable.evaluate3:', valuation);
+        return valuation.value(this);
     }
     variables () {
-        var result = new collections.Set<Variable>();
-        result.add(this);
-        return result;
+        return fset(this);
     }
 }
 
@@ -115,6 +111,17 @@ function makeVariable (name: any = anonymousVariableName()) {
 }
 
 var v = makeVariable;
+
+
+// Create a valuation (i.e., an IFMap<Variable,boolean>) from an object.
+function eta (object): IFMap<Variable, boolean> {
+    var result = fmap<Variable, boolean>();
+    Object.getOwnPropertyNames(object).forEach(p => {
+        result = result.add(makeVariable(p), object[p]);
+    });
+    return result;
+}
+
 
 var negations = {};
 
@@ -139,9 +146,7 @@ class Negation implements Literal {
         return !value;
     }
     variables () {
-        var result = new collections.Set<Variable>();
-        result.union(this.subterm.variables());
-        return result;
+        return this.subterm.variables();
     }
 }
 
@@ -270,82 +275,141 @@ function iff (lhs, rhs) {
 
 /// Clauses and CNF
 
-class Clause extends collections.Set<Literal> implements Evaluable {
-    constructor (literalArray: Array<any>) {
-        super();
-        for (var i = 0; i < literalArray.length; i++) {
-            this.add(makeLiteral(literalArray[i]));
-        }
+function evaluateLiteralSet(literals: IFSet<Literal>, valuation) {
+    if (literals.isEmpty()) {
+        return false;
     }
+    var choice = literals.pickElement();
+    return choice.element.evaluate(valuation) ||
+        evaluateLiteralSet(choice.newSet, valuation);
+}
+
+// This function evaluates the set of literals in a clause.
+//
+function evaluate3LiteralSet(literals: IFSet<Literal>, valuation) {
+    // console.log('evaluate3LiteralSet:', literals.toString(), valuation.toString());
+    if (literals.isEmpty()) {
+        return false;
+    }
+    var choice = literals.pickElement();
+    var choiceValue = choice.element.evaluate3(valuation);
+    // If at least one member is true the whole clause evaluates to true.
+    if (choiceValue) {
+        // console.log('evaluate3LiteralSet:', choice.element.toString(), true);
+        return true;
+    }
+    // If a member is false it does not influence the evaluation; the clause is
+    // true if one other member is true, undefined if no other member is true
+    // and at least one is undefined, and false otherwise.
+    if (choiceValue === false) {
+        // console.log('evaluate3LiteralSet:', choice.element.toString(), false);
+        return evaluate3LiteralSet(choice.newSet, valuation);
+    }
+    // If a member is undefined the clause cannot become false: if another
+    // member is true the whole clause becomes true, otherwise the whole clause
+    // becomes false.  This is achieved by disjoining the result of evaluating
+    // the other literals with `undefined'.
+    return evaluate3LiteralSet(choice.newSet, valuation) || undefined;
+}
+
+function evaluateClauseSet(clauses: IFSet<Clause>, valuation) {
+    if (clauses.isEmpty()) {
+        return true;
+    }
+    var choice = clauses.pickElement();
+    return choice.element.evaluate(valuation) &&
+        evaluateClauseSet(choice.newSet, valuation);
+}
+
+// This function evaluates the set of clauses in a formula in CNF.
+//
+function evaluate3ClauseSet(clauses: IFSet<Clause>, valuation) {
+    // console.log('evaluate3ClauseSet:', clauses.toString(), valuation.toString());
+    if (clauses.isEmpty()) {
+        return true;
+    }
+    var choice = clauses.pickElement();
+    var choiceValue = choice.element.evaluate3(valuation);
+    // If at least one clause in a CNF is false the whole CNF becomes false,
+    // irrespective of the values of the other clauses.
+    if (choiceValue === false) {
+        // console.log('evaluate3ClausesSet:', choice.element.toString(), false);
+        return false;
+    }
+    // If a member clause is true it does not influence the evaluation of the
+    // CNF, the CNF is false if at least one other member is false, undefined if
+    // no member is false and at least one member is undefined, and true only if
+    // all other members are true.
+    if (choiceValue === true) {
+        // console.log('evaluate3ClausesSet:', choice.element.toString(), true);
+        return evaluate3ClauseSet(choice.newSet, valuation);
+    }
+    // If a member is undefined the CNF cannot become true: If another member is
+    // false the whole CNF if false, otherwise the whole clause becomes
+    // undefined.
+    if (evaluate3ClauseSet(choice.newSet, valuation) === false) {
+        // console.log('evaluate3ClausesSet:', choice.newSet.toString(),
+        //    "false because of undefined");
+        return false;
+    }
+    // console.log('evaluate3ClausesSet:', choice.element.toString(), undefined);
+    return undefined;
+}
+
+class Clause implements Evaluable, HasVariables {
+    literals: IFSet<Literal>;
+    constructor (literalArray: Array<any>) {
+        var literals = fset<Literal>();
+        for (var i = 0; i < literalArray.length; i++) {
+            literals = literals.add(makeLiteral(literalArray[i]));
+        }
+        this.literals = literals;
+    }
+
     evaluate (valuation): boolean {
-        var result = false;
-        this.forEach(l => {
-            if (l.evaluate(valuation)) {
-                result = true;
-                // Break from loop.
-                return false;
-            }
-            // Continue loop.
-            return true;
-        });
-        return result;
+        // console.log("Clause: evaluate()")
+        return evaluateLiteralSet(this.literals, valuation);
     }
     evaluate3 (valuation): boolean {
-        var result = false;
-        this.forEach(l => {
-            var value = l.evaluate3(valuation);
-            if (value) {
-                result = true;
-                // Break from loop.
-                return false;
-            } else {
-                if (value === undefined) {
-                    result = undefined;
-                }
-                // Continue loop.
-                return true;
-            }
+        // console.log("Clause: evaluate3()")
+        return evaluate3LiteralSet(this.literals, valuation);
+    }
+    variables (): IFSet<Variable> {
+        var result = fset<Variable>();
+        this.literals.forEach(l => {
+            result = result.union(l.variables());
         });
         return result;
+    }
+    toString (): string {
+        return this.literals.toString();
     }
 }
 
 
-class Cnf extends collections.Set<Clause> implements Evaluable {
+class Cnf implements Evaluable {
+    clauses: IFSet<Clause>;
     constructor (clauseArrays: Array<any>) {
-        super();
+        var clauses = fset<Clause>();
         for (var i = 0; i < clauseArrays.length; i++) {
-            this.add(new Clause(clauseArrays[i]));
+            var newClause = new Clause(clauseArrays[i]);
+            // console.log('Adding clause', newClause);
+            clauses = clauses.add(newClause);
         }
+        this.clauses = clauses;
     }
     evaluate (valuation): boolean {
-        var result = true;
-        this.forEach(c => {
-            if (!c.evaluate(valuation)) {
-                result = false;
-                // Break from loop.
-                return false;
-            }
-            // Continue loop.
-            return true;
-        });
-        return result;
+        // console.log("Cnf: evaluate:", valuation.toString())
+        return evaluateClauseSet(this.clauses, valuation);
     }
     evaluate3 (valuation): boolean {
-        var result = true;
-        this.forEach(c => {
-            var value = c.evaluate3(valuation);
-            if (value === false) {
-                result = false;
-                // Break from loop.
-                return false;
-            } else {
-                if (value === undefined) {
-                    result = undefined;
-                }
-                // Continue loop.
-                return true;
-            }
+        // console.log("Cnf: evaluate3:", valuation.toString())
+        return evaluate3ClauseSet(this.clauses, valuation);
+    }
+    variables (): IFSet<Variable> {
+        var result = fset<Variable>();
+        this.clauses.forEach(c => {
+            result = result.union(c.variables());
         });
         return result;
     }
@@ -359,43 +423,51 @@ function ttTautology (term: Term): boolean {
 }
 
 function ttEntails (kb: Term, term: Term): boolean {
-    return ttCheckAll(kb, term, term.variables(), {});
+    return ttCheckAll(kb, term, term.variables(), fmap<Variable, boolean>());
 }
 
-function ttCheckAll (kb: Term, term: Term, vars: collections.Set<Variable>,
-                     valuation: Object) {
+function ttCheckAll (kb: Term, term: Term, vars: IFList<Variable>,
+                     valuation: IFMap<Variable, boolean>) {
     if (vars.isEmpty()) {
-        if (kb.evaluate3(valuation)) {
-            return term.evaluate3(valuation);
+        if (kb.evaluate(valuation)) {
+            return term.evaluate(valuation);
         } else {
             return true;
         }
     } else {
-        var v = vars.pickAny();
-        valuation[v.name] = true;
-        var res = ttCheckAll(kb, term, vars, valuation);
-        valuation[v.name] = false;
-        return res && ttCheckAll(kb, term, vars, valuation);
+        var v = vars.first;
+        return ttCheckAll(kb, term, vars.rest, valuation.add(v, true))
+                 && ttCheckAll(kb, term, vars.rest, valuation.add(v, false));
     }
 }
 
 function ttSatisfiable (term): boolean {
-    return ttCheckAny (term, term.variables(), {});
+    return ttCheckAny (term, term.variables(), fmap<Variable, boolean>());
 }
 
-function ttCheckAny (term: Term, vars: collections.Set<Variable>,
-                     valuation: Object) {
+function ttCheckAny (term: Term, vars: IFList<Variable>,
+                     valuation: IFMap<Variable, boolean>) {
     if (vars.isEmpty()) {
         return term.evaluate3(valuation);
     } else {
-        var v = vars.pickAny();
-        valuation[v.name] = true;
-        var res = ttCheckAny(term, vars, valuation);
-        if (res) {
-            return true;
-        }
-        valuation[v.name] = false;
-        return ttCheckAny(term, vars, valuation);
+        var v = vars.first;
+        return ttCheckAny(term, vars.rest, valuation.add(v, true))
+                 || ttCheckAny(term, vars.rest, valuation.add(v, false));
     }
 }
 
+function dpll1 (term): boolean {
+    return dpll1Rec (term, term.variables(), fmap<Variable, boolean>());
+}
+
+function dpll1Rec (term: Term, vars: IFList<Variable>,
+                   valuation: IFMap<Variable, boolean>) {
+    var value = term.evaluate3(valuation);
+    if (value !== undefined) {
+        return value;
+    } else {
+        var v = vars.first;
+        return dpll1Rec(term, vars.rest, valuation.add(v, true))
+                 || dpll1Rec(term, vars.rest, valuation.add(v, false));
+    }
+}

@@ -2,8 +2,8 @@
   <library name="Generated files" type="javaScript">
     <properties>
       <sourceFilesUrls>
-        <item url="file://$PROJECT_DIR$/boolean.es6.js" />
         <item url="file://$PROJECT_DIR$/collections.js" />
+        <item url="file://$PROJECT_DIR$/test-collections.js" />
         <item url="file://$PROJECT_DIR$/boolean.js" />
         <item url="file://$PROJECT_DIR$/test-boolean.js" />
       </sourceFilesUrls>
@@ -465,6 +465,7 @@
       <root url="file://$PROJECT_DIR$/out/node_modules/traceur/node_modules/q-io/http-apps/chain.js" />
       <root url="file://$PROJECT_DIR$/boolean.es6.js" />
       <root url="file://$PROJECT_DIR$/collections.js" />
+      <root url="file://$PROJECT_DIR$/test-collections.js" />
       <root url="file://$PROJECT_DIR$/boolean.js" />
       <root url="file://$PROJECT_DIR$/test-boolean.js" />
     </CLASSES>
