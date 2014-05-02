@@ -14,6 +14,11 @@ function anonymousVariableName() {
     return '_' + variableCounter++;
 }
 
+
+
+
+// Common base class for binary operators; right now the only shared
+// functionality is the computation of the variables.
 var BinaryOperator = (function () {
     function BinaryOperator(lhs, rhs) {
         this.lhs = lhs;
@@ -25,6 +30,8 @@ var BinaryOperator = (function () {
     return BinaryOperator;
 })();
 
+
+/// True and False
 var Top = (function () {
     function Top() {
     }
@@ -43,6 +50,7 @@ var Top = (function () {
     return Top;
 })();
 
+// Define some convenient function names to build terms.
 function t() {
     return new Top();
 }
@@ -70,8 +78,13 @@ function f() {
 }
 
 /// Implementation of Literals and General Terms
+// A table for interning all variables.  Stores the mapping variable name (as
+// string) to variable object.  Therefore variables should not be created with
+// new but with `makeVariable' or `v'.
 var variables = {};
 
+// The class for variables.  Variables are interned and can be compared with
+// ===.
 var Variable = (function () {
     function Variable(name) {
         if (typeof name === "undefined") { name = anonymousVariableName(); }
@@ -81,6 +94,11 @@ var Variable = (function () {
     Variable.prototype.toString = function () {
         return this.name;
     };
+
+    // In TypeScript Boolean values can also be `undefined', and this is also
+    // the return value we get from accessing a missing element in an IFMap.
+    // Therefore we check this case and throw an error, to avoid silent
+    // failures.
     Variable.prototype.evaluate = function (valuation) {
         var value = valuation.value(this);
         if (value === undefined) {
@@ -98,6 +116,11 @@ var Variable = (function () {
     return Variable;
 })();
 
+// The factory function for variables.  Checks whether a variable with the
+// given name already exists in the variable table and returns this variable;
+// creates a new instance if a variable with the same name does not already
+// exist.  The argument `name' can also be an existing variable which is
+// simply returned.
 function makeVariable(name) {
     if (typeof name === "undefined") { name = anonymousVariableName(); }
     if (name instanceof Variable) {
@@ -113,9 +136,14 @@ function makeVariable(name) {
     throw ('Cannot create subterm from ' + name);
 }
 
+// A short name for `makeVariable'
 var v = makeVariable;
 
 // Create a valuation (i.e., an IFMap<Variable,boolean>) from an object.
+// Since anything but objects is cumbersome to write down as literal, and
+// plain objects are not particularly nice as data structures for recursive
+// programs, we write environments as objects and use `eta' to convert them to
+// the required collection type.
 function eta(object) {
     var result = fmap();
     Object.getOwnPropertyNames(object).forEach(function (p) {
@@ -124,8 +152,13 @@ function eta(object) {
     return result;
 }
 
+// Table for interning negations.
 var negations = {};
 
+// The class for negations.  Strictly speaking this is only a literal when its
+// subterm is a variable; therefore we should probably have an abstract class
+// or interface with concrete subclasses for the different cases, but this
+// seems like overkill for such a simple program.
 var Negation = (function () {
     function Negation(subterm) {
         this.subterm = subterm;
@@ -160,6 +193,9 @@ function makeLiteral(l) {
     return makeVariable(l);
 }
 
+// Create a negation. Interns negation terms with a variable as subterm.
+// Automatically removes double negations, so it's not correct to use this to
+// create arbitrary terms, but this feature is useful for building CNFs.
 function not(v) {
     var negation;
     if (v instanceof Variable) {
@@ -182,6 +218,7 @@ function not(v) {
     throw ('Cannot negate' + v);
 }
 
+// Classes for the various operators.  Should be relatively straightforward.
 var And = (function (_super) {
     __extends(And, _super);
     function And(lhs, rhs) {
@@ -292,6 +329,9 @@ function iff(lhs, rhs) {
 }
 
 /// Clauses and CNF
+// Note that Clauses and CNFs are not defined as Terms.
+// Evaluate a set of literals for a clause, i.e., return the disjunction of
+// their truth values.
 function evaluateLiteralSet(literals, valuation) {
     if (literals.isEmpty()) {
         return false;
@@ -300,7 +340,8 @@ function evaluateLiteralSet(literals, valuation) {
     return choice.element.evaluate(valuation) || evaluateLiteralSet(choice.newSet, valuation);
 }
 
-// This function evaluates the set of literals in a clause.
+// Evaluate the set of literals in a clause, taking care to correctly thread
+// undefined values through the evaluation.
 //
 function evaluate3LiteralSet(literals, valuation) {
     // console.log('evaluate3LiteralSet:', literals.toString(), valuation.toString());
@@ -331,6 +372,8 @@ function evaluate3LiteralSet(literals, valuation) {
     return evaluate3LiteralSet(choice.newSet, valuation) || undefined;
 }
 
+// Evaluate the set of clauses in a CNF, i.e., return the conjunction of the
+// clause values.
 function evaluateClauseSet(clauses, valuation) {
     if (clauses.isEmpty()) {
         return true;
@@ -339,8 +382,8 @@ function evaluateClauseSet(clauses, valuation) {
     return choice.element.evaluate(valuation) && evaluateClauseSet(choice.newSet, valuation);
 }
 
-// This function evaluates the set of clauses in a formula in CNF.
-//
+// Evaluates the set of clauses in a formula in CNF taking care of undefined
+// values.
 function evaluate3ClauseSet(clauses, valuation) {
     // console.log('evaluate3ClauseSet:', clauses.toString(), valuation.toString());
     if (clauses.isEmpty()) {
@@ -437,14 +480,18 @@ var Cnf = (function () {
 })();
 
 /// Truth-table evaluation
+// Recursively build a truth table and check whether all rows evaluate to true.
 function ttTautology(term) {
     return ttEntails(t(), term);
 }
 
+// Check via a truth table whether `kb' entails ``term'.
 function ttEntails(kb, term) {
     return ttCheckAll(kb, term, term.variables(), fmap());
 }
 
+// Check all rows in the truth table for `kb' and `term' whether `kb |= term'
+// holds.
 function ttCheckAll(kb, term, vars, valuation) {
     if (vars.isEmpty()) {
         if (kb.evaluate(valuation)) {
@@ -458,10 +505,12 @@ function ttCheckAll(kb, term, vars, valuation) {
     }
 }
 
+// Build a truth table to check whether `term' is satisfiable.
 function ttSatisfiable(term) {
     return ttCheckAny(term, term.variables(), fmap());
 }
 
+// Check whether any row of the truth table for `term' evaluates to true.
 function ttCheckAny(term, vars, valuation) {
     if (vars.isEmpty()) {
         return term.evaluate3(valuation);
@@ -471,6 +520,9 @@ function ttCheckAny(term, vars, valuation) {
     }
 }
 
+// The basic recursive backtracking algorithm for DPLL.  Note that this version
+// misses several optiomization thet would be required to justify the name
+// DPLL.  The name signifies that it's the first step towards DPLL.
 function dpll1(term) {
     return dpll1Rec(term, term.variables(), fmap());
 }

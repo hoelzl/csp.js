@@ -9,18 +9,29 @@ function anonymousVariableName () {
     return '_' + variableCounter++;
 }
 
+
+// Evaluabales are things that can be evaluated to a Boolean value given a
+// valuation for the variables.
 interface Evaluable {
-    evaluate (valuation): boolean;   // true or false
-    evaluate3 (valuation): boolean;  // true, false or undefined
+    evaluate (valuation: IFMap<Variable, boolean>): boolean;   // true or false
+    evaluate3 (valuation: IFMap<Variable, boolean>): boolean;  // true, false or undefined
 }
 
+
+// Things that have variables as substructure.  The most obvious class that
+// inherits this interface is `Term', but things like `BinaryOperator' or
+// Clauses have variables and are not terms.
 interface HasVariables {
     variables(): IFSet<Variable>;
 }
 
+// The superclass of all Terms.
 interface Term extends Evaluable, HasVariables {
 }
 
+
+// Common base class for binary operators; right now the only shared
+// functionality is the computation of the variables.
 class BinaryOperator implements HasVariables {
     constructor (public lhs: Term, public rhs: Term) {}
     variables () {
@@ -28,8 +39,12 @@ class BinaryOperator implements HasVariables {
     }
 }
 
+// A Literal is either a Variable or a negated Variable.
 interface Literal extends Term {
 }
+
+
+/// True and False
 
 class Top implements Term {
     toString (): string {
@@ -46,6 +61,7 @@ class Top implements Term {
     }
 }
 
+// Define some convenient function names to build terms.
 function t (): Term {
     return new Top();
 }
@@ -69,10 +85,16 @@ function f (): Term {
     return new Bottom();
 }
 
+
 /// Implementation of Literals and General Terms
 
+// A table for interning all variables.  Stores the mapping variable name (as
+// string) to variable object.  Therefore variables should not be created with
+// new but with `makeVariable' or `v'.
 var variables = {};
 
+// The class for variables.  Variables are interned and can be compared with
+// ===.
 class Variable implements Literal {
     constructor (public name: string = anonymousVariableName()) {
         variables[name] = this;
@@ -80,6 +102,10 @@ class Variable implements Literal {
     toString (): string {
         return this.name;
     }
+    // In TypeScript Boolean values can also be `undefined', and this is also
+    // the return value we get from accessing a missing element in an IFMap.
+    // Therefore we check this case and throw an error, to avoid silent
+    // failures.
     evaluate (valuation: IFMap<Variable, boolean>): boolean {
         var value = valuation.value(this);
         if (value === undefined) {
@@ -96,6 +122,11 @@ class Variable implements Literal {
     }
 }
 
+// The factory function for variables.  Checks whether a variable with the
+// given name already exists in the variable table and returns this variable;
+// creates a new instance if a variable with the same name does not already
+// exist.  The argument `name' can also be an existing variable which is
+// simply returned.
 function makeVariable (name: any = anonymousVariableName()) {
     if (name instanceof Variable) {
         return name;
@@ -110,10 +141,16 @@ function makeVariable (name: any = anonymousVariableName()) {
     throw('Cannot create subterm from ' + name);
 }
 
+
+// A short name for `makeVariable'
 var v = makeVariable;
 
 
 // Create a valuation (i.e., an IFMap<Variable,boolean>) from an object.
+// Since anything but objects is cumbersome to write down as literal, and
+// plain objects are not particularly nice as data structures for recursive
+// programs, we write environments as objects and use `eta' to convert them to
+// the required collection type.
 function eta (object): IFMap<Variable, boolean> {
     var result = fmap<Variable, boolean>();
     Object.getOwnPropertyNames(object).forEach(p => {
@@ -123,8 +160,13 @@ function eta (object): IFMap<Variable, boolean> {
 }
 
 
+// Table for interning negations.
 var negations = {};
 
+// The class for negations.  Strictly speaking this is only a literal when its
+// subterm is a variable; therefore we should probably have an abstract class
+// or interface with concrete subclasses for the different cases, but this
+// seems like overkill for such a simple program.
 class Negation implements Literal {
     constructor (public subterm: Term) {
         if (subterm instanceof Variable) {
@@ -157,6 +199,9 @@ function makeLiteral(l: any) {
     return makeVariable(l);
 }
 
+// Create a negation. Interns negation terms with a variable as subterm.
+// Automatically removes double negations, so it's not correct to use this to
+// create arbitrary terms, but this feature is useful for building CNFs.
 function not(v) {
     var negation;
     if (v instanceof Variable) {
@@ -178,6 +223,8 @@ function not(v) {
     }
     throw('Cannot negate' + v);
 }
+
+// Classes for the various operators.  Should be relatively straightforward.
 
 class And extends BinaryOperator implements Term {
     constructor (public lhs: Term, public rhs: Term) {
@@ -275,6 +322,10 @@ function iff (lhs, rhs) {
 
 /// Clauses and CNF
 
+// Note that Clauses and CNFs are not defined as Terms.
+
+// Evaluate a set of literals for a clause, i.e., return the disjunction of
+// their truth values.
 function evaluateLiteralSet(literals: IFSet<Literal>, valuation) {
     if (literals.isEmpty()) {
         return false;
@@ -284,7 +335,8 @@ function evaluateLiteralSet(literals: IFSet<Literal>, valuation) {
         evaluateLiteralSet(choice.newSet, valuation);
 }
 
-// This function evaluates the set of literals in a clause.
+// Evaluate the set of literals in a clause, taking care to correctly thread
+// undefined values through the evaluation.
 //
 function evaluate3LiteralSet(literals: IFSet<Literal>, valuation) {
     // console.log('evaluate3LiteralSet:', literals.toString(), valuation.toString());
@@ -312,6 +364,8 @@ function evaluate3LiteralSet(literals: IFSet<Literal>, valuation) {
     return evaluate3LiteralSet(choice.newSet, valuation) || undefined;
 }
 
+// Evaluate the set of clauses in a CNF, i.e., return the conjunction of the
+// clause values.
 function evaluateClauseSet(clauses: IFSet<Clause>, valuation) {
     if (clauses.isEmpty()) {
         return true;
@@ -321,8 +375,8 @@ function evaluateClauseSet(clauses: IFSet<Clause>, valuation) {
         evaluateClauseSet(choice.newSet, valuation);
 }
 
-// This function evaluates the set of clauses in a formula in CNF.
-//
+// Evaluates the set of clauses in a formula in CNF taking care of undefined
+// values.
 function evaluate3ClauseSet(clauses: IFSet<Clause>, valuation) {
     // console.log('evaluate3ClauseSet:', clauses.toString(), valuation.toString());
     if (clauses.isEmpty()) {
@@ -418,14 +472,19 @@ class Cnf implements Evaluable {
 
 /// Truth-table evaluation
 
+// Recursively build a truth table and check whether all rows evaluate to true.
 function ttTautology (term: Term): boolean {
     return ttEntails(t(), term);
 }
 
+// Check via a truth table whether `kb' entails ``term'.
 function ttEntails (kb: Term, term: Term): boolean {
     return ttCheckAll(kb, term, term.variables(), fmap<Variable, boolean>());
 }
 
+
+// Check all rows in the truth table for `kb' and `term' whether `kb |= term'
+// holds.
 function ttCheckAll (kb: Term, term: Term, vars: IFList<Variable>,
                      valuation: IFMap<Variable, boolean>) {
     if (vars.isEmpty()) {
@@ -441,10 +500,12 @@ function ttCheckAll (kb: Term, term: Term, vars: IFList<Variable>,
     }
 }
 
+// Build a truth table to check whether `term' is satisfiable.
 function ttSatisfiable (term): boolean {
     return ttCheckAny (term, term.variables(), fmap<Variable, boolean>());
 }
 
+// Check whether any row of the truth table for `term' evaluates to true.
 function ttCheckAny (term: Term, vars: IFList<Variable>,
                      valuation: IFMap<Variable, boolean>) {
     if (vars.isEmpty()) {
@@ -456,6 +517,10 @@ function ttCheckAny (term: Term, vars: IFList<Variable>,
     }
 }
 
+
+// The basic recursive backtracking algorithm for DPLL.  Note that this version
+// misses several optiomization thet would be required to justify the name
+// DPLL.  The name signifies that it's the first step towards DPLL.
 function dpll1 (term): boolean {
     return dpll1Rec (term, term.variables(), fmap<Variable, boolean>());
 }
